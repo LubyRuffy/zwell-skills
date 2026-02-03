@@ -4,23 +4,13 @@
 
 ## 安装与使用
 
-1. 克隆仓库：
+1. 使用官方安装器安装技能：
 
 ```bash
-git clone https://github.com/LubyRuffy/zwell-skills.git
+$skill-installer install https://github.com/LubyRuffy/zwell-skills/tree/main/skills/github-issue
 ```
 
-2. 将需要的技能复制到 `CODEX_HOME`：
-
-```bash
-# CODEX_HOME 默认是 ~/.codex
-export CODEX_HOME=${CODEX_HOME:-~/.codex}
-
-# 安装单个技能
-cp -R zwell-skills/skills/github-issue "$CODEX_HOME/skills/local/"
-```
-
-3. 在 Codex 中直接使用技能名称即可触发。
+2. 重启 Codex 以加载新技能。
 
 ## 已有技能
 
