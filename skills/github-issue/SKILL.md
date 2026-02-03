@@ -7,15 +7,18 @@ description: 处理 GitHub Issue 的完整闭环：获取 issue 详情、创建�
 
 ## 概览
 按两阶段执行：
-- 开始/修复阶段：创建 worktree 分支并完成修复。
-- 关闭/完成阶段：提交、rebase、创建/合并 PR、清理分支与 worktree、关闭 issue。
+- 阶段1（拉取 issue 并解决问题）：创建 worktree 分支并完成修复。
+- 阶段2（推送 PR 并 close）：提交、rebase、创建/合并 PR、清理分支与 worktree、关闭 issue。
+按需阶段：
+- 阶段2.5（过程记录）：当用户说“把过程记录一下”时，作为 GitHub Issue 评论提交。
 贯穿全过程的强制要求：
 - 发现的问题、用户反馈、结论与思考，必须作为“过程记录”评论到 GitHub Issue（用 `gh issue comment`）。
 - 最终 PR 说明必须包含“问题原因”和“修复方案”。
 
 ## 决策流程
-- 用户提供 issue 号码 / #N / issue URL：执行“开始/修复”。
-- 用户说“关闭/close/完成”等：执行“关闭/完成”。
+- 用户提供 issue 号码 / #N / issue URL：执行“阶段1（拉取 issue 并解决问题）”。
+- 用户说“把过程记录一下/记录过程/补记过程”等：执行“阶段2.5（过程记录）”。
+- 用户说“关闭/close/完成”等：执行“阶段2（推送 PR 并 close）”。
 - 若关闭请求时没有当前 issue 上下文：询问要关闭哪个 issue。
 
 ## 需要保持的上下文
@@ -26,9 +29,14 @@ description: 处理 GitHub Issue 的完整闭环：获取 issue 详情、创建�
 - worktree_path
 - branch_name
 - base_repo_path
- - process_notes（过程记录要点：问题/反馈/结论）
+- process_notes（过程记录要点：问题/反馈/结论）
 
-## 过程记录（强制）
+## 阶段2.5：过程记录（按需触发）
+触发条件：用户明确要求“把过程记录一下/记录过程/补记过程”等。
+
+执行动作：整理当前进展与结论，提交为 GitHub Issue 评论（可重复追加）。
+
+## 过程记录（强制原则）
 在修复过程中只要出现以下信息，立即写入 issue 评论并持续追加：
 - 发现的问题或定位结果
 - 用户反馈或复现条件变化
@@ -39,7 +47,7 @@ description: 处理 GitHub Issue 的完整闭环：获取 issue 详情、创建�
 gh issue comment <num> --repo <owner/name> --body $'## 过程记录\n- 发现的问题：...\n- 用户反馈：...\n- 结论/思考：...\n- 影响范围：...\n- 验证情况：...'
 ```
 
-## 开始/修复
+## 阶段1：拉取 issue 并解决问题
 
 1. 解析 issue 引用
    - URL：提取 owner/name 与 issue 号。
@@ -77,7 +85,7 @@ gh issue comment <num> --repo <owner/name> --body $'## 过程记录\n- 发现的
 - 若发现主仓库有改动（`git -C "$base_repo_path" status -sb` 不是干净的 `main`），立刻停止并回到 `$worktree_path` 重新操作。
 - 运行测试/构建时，必须显式 `workdir` 为 `$worktree_path`（或子目录），避免默认落在主仓库。
 
-## 关闭/完成
+## 阶段2：推送 PR 并 close
 
 1. 确认上下文
    - 若缺少 repo/issue/branch/worktree 等信息，询问用户。
