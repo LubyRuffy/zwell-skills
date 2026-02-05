@@ -56,6 +56,19 @@ gh issue comment <num> --repo <owner/name> --body $'## 过程记录\n- 发现的
    - `gh issue view <num> --repo <owner/name> --json title,body,labels,assignees -q '.title'`
    - `gh repo view <owner/name> --json defaultBranchRef -q '.defaultBranchRef.name'`
    - 若 gh 命令提示未登录，再提醒用户执行 `gh auth login`。
+2.1 解析并处理 issue 中的图片（强制）
+   - 获取 issue body：
+     - `gh issue view <num> --repo <owner/name> --json body -q '.body'`
+   - 从 body 中提取图片链接（Markdown `![](...)` 或裸 URL），保存到本地目录：
+     - 目录：`$base_repo_path/.issue-assets/issue-<num>/`
+     - 示例提取（任一即可）：
+       - `python - <<'PY'\nimport os,re,sys\nbody=sys.stdin.read()\nurls=re.findall(r'!\\[[^\\]]*\\]\\(([^)]+)\\)', body)+re.findall(r'(https?://\\S+)', body)\nfor u in urls:\n  if any(k in u for k in [\"user-images\", \"github.com\", \"githubusercontent\", \"assets\"]):\n    print(u)\nPY`
+   - 下载图片：
+     - `mkdir -p "$base_repo_path/.issue-assets/issue-<num>"\ncd "$base_repo_path/.issue-assets/issue-<num>"\nwhile read -r u; do curl -L -o \"$(basename \"${u%%\\?*}\")\" \"$u\"; done`
+   - 理解图片内容并写入过程记录：
+     - 在支持图片查看的环境中打开并逐张描述关键内容（例如报错信息、UI状态、日志片段、对比图）。
+     - 若无法查看图片，至少记录“图片内容待确认”的风险点与影响范围。
+   - 任何从图片中得到的关键信息，都必须追加到“过程记录”评论中。
 3. 解析仓库根目录并拉取最新
    - `base_repo_path=$(git rev-parse --show-toplevel)`
    - `git -C "$base_repo_path" fetch origin`
