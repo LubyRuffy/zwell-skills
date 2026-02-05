@@ -3,7 +3,7 @@ name: github-issue
 description: 处理 GitHub Issue 的完整闭环：获取 issue 详情、创建并进入 worktree 分支、修复问题、创建关联 issue 的 PR、squash 合并、清理本地/远程分支与 worktree，并在需要时关闭 issue。适用于用户输入“修复 issue 3”“#3”或 issue URL 等开始修复，以及用户输入“关闭/close/完成”结束并合并的场景。
 ---
 
-# GitHub Issue Workflow
+# GitHub Issue 工作流
 
 ## 概览
 按两阶段执行：
@@ -87,7 +87,7 @@ gh issue comment <num> --repo <owner/name> --body $'## 过程记录\n- 发现的
      - `git rev-parse --abbrev-ref HEAD` 应为 `issue-<num>` 分支
      - `git status -sb` 不应显示 `main` 分支
    - 修改代码并跑必要测试/构建（所有命令必须在 `$worktree_path` 执行）。
-   - 如果是bug，必须要先通过单元测试（或者集成测试）复现bug，再修改代码。
+   - 如果是后端 bug，必须尽可能先通过单元测试复现，再修改代码；确实无法单测时，再使用集成测试复现并说明原因。
    - 过程中发现问题/收到反馈/得到结论时，立即按“过程记录（强制）”写入 issue 评论。
    - 可暂不提交，留到“关闭/完成”阶段统一提交。
 
