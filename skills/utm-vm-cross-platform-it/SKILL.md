@@ -1,6 +1,6 @@
 ---
 name: utm-vm-cross-platform-it
-description: Design and implement cross-platform integration testing orchestrated from a macOS host using UTM virtual machines (Linux/Windows/macOS guests) via utmctl + SSH/WinRM. Use when you need to run real system-level integration tests across OSes (e.g., certificate/trust store, drivers, installers, privileged operations), especially on Apple Silicon, while keeping CI conventions like ci-Windows/ci-Linux/ci-macOS naming and default ci/cipass accounts.
+description: Design and implement cross-platform integration testing for Go projects, orchestrated from a macOS host using UTM virtual machines (Linux/Windows/macOS guests) via utmctl + SSH/WinRM. Use when you need real system-level integration tests across OSes (certificate/trust store, drivers, installers, privileged operations), especially on Apple Silicon, while keeping CI conventions like ci-Windows/ci-Linux/ci-macOS naming and default ci/cipass accounts. SSH and WinRM should be implemented directly in Go (no Python dependencies such as pywinrm).
 ---
 
 # UTM VM 跨平台集成测试（宿主机编排）
@@ -8,6 +8,8 @@ description: Design and implement cross-platform integration testing orchestrate
 ## 目标
 
 在 macOS 宿主机上，用 UTM 启动/控制 Linux、Windows（可选 macOS）虚拟机，并在 guest 内执行真实集成测试；宿主机负责“编排与触发”，guest 负责“实际系统级动作”。要求保留 CI 约定：VM 命名 `ci-Windows/ci-Linux/ci-macOS`（或 `ci-os-*`），默认账号 `ci/cipass`，优先 SSH，Windows 可选 WinRM，必要时 `utmctl exec` 兜底。
+
+本技能默认面向 **Go（Golang）项目**：宿主机侧的编排器、远程执行（SSH/WinRM）、日志采集与超时控制，尽量都用 **Go 代码直接实现**；避免引入 Python 运行时与 `pywinrm` 这类依赖。
 
 ## 工作流（按顺序执行）
 
@@ -30,7 +32,7 @@ description: Design and implement cross-platform integration testing orchestrate
 ### 3. 选择触发通道：SSH 优先，WinRM/utmctl 兜底
 
 - Linux guest：优先 SSH（能 stream 输出、适配 sudo/root）；若 SSH 端口不通且 utmctl 存在，fallback `utmctl exec`。
-- Windows guest：优先 SSH（OpenSSH Server）；可选 WinRM（5985 + NTLM，pywinrm）；两者都不可用时 fallback `utmctl exec`。
+- Windows guest：优先 SSH（OpenSSH Server）；可选 WinRM（5985；认证按环境选择 NTLM/Kerberos，**通过 Go WinRM 客户端实现**）；两者都不可用时 fallback `utmctl exec`。
 - macOS guest：优先 SSH（规避部分后端对 `ip-address/exec` 的限制）。
 
 准备清单见：`references/requirements.md`。
@@ -57,7 +59,7 @@ Go 的落地骨架见：`references/go-pattern.md`。
 - 若 guest 里已预置 repo：通过配置 `*_REPO_DIR` 直接使用。
 - 若未预置：实现“宿主机打包并传输”的路径。
   - Linux：tar.gz + SSH stdin 解压
-  - Windows：优先 WinRM 路径用宿主机临时 HTTP server 分发 zip；或用 scp/ssh（若可用）
+  - Windows：优先走 SSH/scp（若可用）；否则用 WinRM 执行 PowerShell，从宿主机临时 HTTP server 拉取 zip（宿主机 HTTP server 也建议用 Go 内置实现）
 
 ### 7. 权限与凭据（必须可覆盖，默认可用）
 
