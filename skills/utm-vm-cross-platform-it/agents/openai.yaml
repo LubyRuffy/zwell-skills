@@ -1,0 +1,4 @@
+interface:
+  display_name: "UTM 跨平台集成测试"
+  short_description: "用 UTM 编排 VM 跑跨平台集成测试（ci-* / ci-cipass / SSH）"
+  default_prompt: "为当前仓库设计并落地一套“macOS 宿主机 + UTM VM”的跨平台集成测试方案：保留 VM 命名约定（ci-Windows/ci-Linux/ci-macOS，或 ci-os-*），默认账号 ci/cipass；优先使用 SSH（Windows OpenSSH Server、Linux sshd、macOS SSH），Windows 可选 WinRM(5985+NTLM)+pywinrm，必要时 utmctl exec 兜底；实现可重复执行的测试编排（建议 Go build tags 或等价机制），包含 IP 发现、VM 启动、代码分发/同步、权限提升(root/管理员)、超时与日志；输出独立文档与必要脚本，并确保本仓库能编译/测试通过。"
