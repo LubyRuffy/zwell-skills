@@ -14,6 +14,7 @@ description: 处理 GitHub Issue 的完整闭环：获取 issue 详情、创建�
 贯穿全过程的强制要求：
 - 发现的问题、用户反馈、结论与思考，必须作为“过程记录”评论到 GitHub Issue（用 `gh issue comment`）。
 - 最终 PR 说明必须包含“问题原因”和“修复方案”。
+- 若本次排查/修复耗时较长且流程复杂（例如多轮定位、涉及环境/CI/worktree 等坑），在提交 PR 前将可复用的经验教训沉淀到仓库 `AGENTS.md`，随 PR 一起提交，便于下次提速与避免重复踩坑。
 
 ## 决策流程
 - 用户提供 issue 号码 / #N / issue URL：执行“阶段1（拉取 issue 并解决问题）”。
@@ -106,6 +107,20 @@ gh issue comment <num> --repo <owner/name> --body $'## 过程记录\n- 发现的
    - `cd "$worktree_path"`
    - `git status -sb`
    - 若有改动：`git add -A`
+2.1. 经验沉淀到 `AGENTS.md`（条件触发）
+   - 触发条件：本次排查/修复耗时较长且流程复杂，且存在可复用的坑点/排查路径/命令。
+   - 执行动作：在 `$worktree_path/AGENTS.md` 追加一段简短“经验教训”，并纳入本次提交（避免在 `$base_repo_path` 误改）。
+   - 内容要求：只写可复用、可操作、可检索的要点；避免粘贴大段日志/输出；避免写入密钥等敏感信息。
+   - 推荐模板（按需精简）：
+     ```
+     ## 经验教训：Issue #<num> / PR #<pr_number>
+     - 现象：...
+     - 根因：...
+     - 排查路径（关键步骤/关键命令）：...
+     - 修复要点：...
+     - 验证方式：...
+     ```
+   - 若仓库不存在 `AGENTS.md`：先询问用户是否要创建；若不创建，至少把这段经验补充到 issue“过程记录”评论中。
 3. 提交（保持单提交，方便 squash）
    - `git commit -m "Fix #<num>: <issue_title>"`
 4. rebase 到最新默认分支
