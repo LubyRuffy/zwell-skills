@@ -73,6 +73,11 @@ gh issue comment <num> --repo <owner/name> --body $'## 过程记录\n- 发现的
 3. 解析仓库根目录并拉取最新
    - `base_repo_path=$(git rev-parse --show-toplevel)`
    - `git -C "$base_repo_path" fetch origin`
+4. 主 worktree 脏态检查（强制，防止误改 main）
+   - `git -C "$base_repo_path" status --porcelain` 必须为空。
+   - 若不为空：说明主 worktree 有未提交改动（常见原因：误在 main 上改了文件，导致后续 `git pull`/`worktree add`/rebase 等都受影响）。
+     - 若能确认这些改动就是本次 issue 相关（或明显是误改），按“误改救援流程（主 worktree -> worktree）”处理后再继续。
+     - 若无法确认改动归属（可能是用户自己的 WIP）：先停止并询问用户要如何处理（commit / stash / 放弃 / 迁移到其他分支）。不要擅自 `reset --hard`。
 5. 生成分支与 worktree 路径
    - `branch_name=issue-<num>`（需要时加 slug）
    - `worktree_path=<base_repo_path>/.worktrees/<branch_name>`
@@ -96,8 +101,34 @@ gh issue comment <num> --repo <owner/name> --body $'## 过程记录\n- 发现的
 - **严禁**在 `$base_repo_path`（主 worktree）直接修改/应用补丁/复制文件。
 - 仅允许在 `$base_repo_path` 执行：`fetch`、`worktree add/remove/prune`、`gh pr merge` 等管理命令。
 - 任何 `cp` / `apply` / `git apply` / 编辑器写入都必须指向 `$worktree_path`。
-- 若发现主仓库有改动（`git -C "$base_repo_path" status -sb` 不是干净的 `main`），立刻停止并回到 `$worktree_path` 重新操作。
+- 若发现主仓库有改动（`git -C "$base_repo_path" status -sb` 不是干净的 `main`），立刻停止：按“误改救援流程（主 worktree -> worktree）”处理，确保 `$base_repo_path` 恢复干净后再继续。
 - 运行测试/构建时，必须显式 `workdir` 为 `$worktree_path`（或子目录），避免默认落在主仓库。
+
+### Codex 工具级防呆（强制）
+- **所有会改动文件的操作必须使用 `$worktree_path` 绝对路径**（例如 `$worktree_path/internal/foo/bar.go`），不要对仓库相对路径（如 `internal/foo/bar.go`）做编辑/打补丁，否则极易落到主 worktree。
+- **所有 shell 命令必须显式指定目录**：
+  - Git 命令优先用 `git -C "$base_repo_path" ...` 或 `git -C "$worktree_path" ...`。
+  - 构建/测试命令必须在 worktree 下执行：`cd "$worktree_path"` 后再跑，或在工具调用里显式 `workdir="$worktree_path"`。
+- 每次准备写代码（apply_patch / heredoc / 生成文件 / gofmt）前，先执行并人工确认输出：
+  - `git -C "$base_repo_path" status -sb`
+  - `git -C "$worktree_path" status -sb`
+  - `git -C "$worktree_path" rev-parse --show-toplevel`
+
+### 误改救援流程（主 worktree -> worktree）
+目标：把误落在 `$base_repo_path` 的改动安全迁移到 `$worktree_path`，并恢复主 worktree 干净状态，避免 `git pull` 失败。
+
+1. 在主 worktree 创建救援 stash（包含未跟踪文件）
+   - `git -C "$base_repo_path" stash push -u -m "codex-rescue: move changes into $branch_name"`
+2. 确保 worktree 已创建并处于目标分支
+   - `git -C "$base_repo_path" worktree list`
+   - `git -C "$worktree_path" rev-parse --abbrev-ref HEAD`
+3. 在 worktree 应用救援 stash
+   - `git -C "$worktree_path" stash list`
+   - `git -C "$worktree_path" stash pop`（若不是最新一条，改用 `stash pop stash@{N}`）
+4. 复核：主 worktree 已干净、改动已迁移
+   - `git -C "$base_repo_path" status --porcelain` 应为空
+   - `git -C "$worktree_path" status -sb` 应能看到对应改动
+5. 若 `stash pop` 有冲突：按冲突流程解决，但仍需保证最终 `$base_repo_path` 干净。
 
 ## 阶段2：推送 PR 并 close
 
