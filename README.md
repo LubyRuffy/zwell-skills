@@ -14,6 +14,8 @@ $skill-installer install https://github.com/LubyRuffy/zwell-skills/tree/main/ski
 
 ## 已有技能
 
+- gogogo：把后续请求切换为完整闭环执行模式；若已给 issue 编号或 URL 则跳过建 issue，否则先建 issue，再持续推进到实现、验证、review、集成、部署与收尾。
+- 安装：`$skill-installer install https://github.com/LubyRuffy/zwell-skills/tree/main/skills/gogogo`
 - github-issue：GitHub Issue 闭环处理流程（创建 worktree、修复、PR、合并、清理）。
 - 安装：`$skill-installer install https://github.com/LubyRuffy/zwell-skills/tree/main/skills/github-issue`
 - golang-quality-optimizer：Go 代码质量优化与简化（不改行为前提下重构、修 lint/staticcheck、补测试、并发与性能质量加固）。
