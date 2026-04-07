@@ -1,4 +1,4 @@
 interface:
   display_name: "GoGoGo"
-  short_description: "把后续请求切到单人开发直达 main 的闭环执行模式"
-  default_prompt: "Use $gogogo to treat the following request as a single-developer full lifecycle workflow: create or reuse an issue, allow local temporary branches when useful, but integrate back to main before any push and push/deploy only from main."
+  short_description: "把后续请求切到本地并回 main 后直推的闭环执行模式"
+  default_prompt: "Use $gogogo to treat the following request as a single-developer full lifecycle workflow: create or reuse an issue, allow local temporary branches when useful, but merge back to local main before push and then commit/push/deploy only from main unless the user explicitly asks for a PR flow."
