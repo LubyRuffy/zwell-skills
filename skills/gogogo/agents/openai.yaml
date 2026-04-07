@@ -1,4 +1,4 @@
 interface:
   display_name: "GoGoGo"
-  short_description: "把后续请求切到从 issue 到上线的完整闭环执行模式"
-  default_prompt: "Use $gogogo to treat the following request as a full lifecycle workflow: if the user already provides an issue number or issue URL, skip issue creation; otherwise create a tracking issue first, then continue through implementation, verification, review, integration, deployment, and closure."
+  short_description: "把后续请求切到单人开发直达 main 的闭环执行模式"
+  default_prompt: "Use $gogogo to treat the following request as a single-developer full lifecycle workflow: create or reuse an issue, allow local temporary branches when useful, but integrate back to main before any push and push/deploy only from main."
