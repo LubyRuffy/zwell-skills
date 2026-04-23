@@ -1,0 +1,4 @@
+interface:
+  display_name: "GoGlab"
+  short_description: "GitLab 内网 issue 到 MR 与 CI 闭环执行模式"
+  default_prompt: "Use $goglab to treat the following request as a GitLab intranet full lifecycle workflow: resolve or create the issue, work on a local branch with glab, open an MR instead of pushing main directly, wait for CI to pass, then finish cleanup and closure."
