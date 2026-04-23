@@ -1,0 +1,7 @@
+interface:
+  display_name: "Linux Hot Restart"
+  short_description: "Linux 单机服务零停机发布、热重启、健康检查与蓝绿切流方案"
+  default_prompt: "Use $linux-hot-restart to design or implement a zero-downtime Linux deployment with health checks, blue/green slots, and safe cutover."
+
+policy:
+  allow_implicit_invocation: true
