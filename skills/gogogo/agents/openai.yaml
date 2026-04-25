@@ -1,4 +1,4 @@
 interface:
   display_name: "GoGoGo"
-  short_description: "改码前先同步 main，再按闭环从 main 直推的执行模式"
-  default_prompt: "Use $gogogo to treat the following request as a single-developer full lifecycle workflow: create or reuse an issue, sync local main with the latest remote before any code changes, allow local temporary branches only after that synced base exists, then merge back to local main before push and commit/push/deploy only from main unless the user explicitly asks for a PR flow."
+  short_description: "同步 main、查根因、过审查后直推的闭环模式"
+  default_prompt: "Use $gogogo to run the following request end to end: create or reuse an issue, sync local main before code changes, prove the root cause, avoid hardcoded symptom fixes, pass a pre-commit review gate, then merge back to main and push/deploy from main unless I explicitly ask for a PR flow."
