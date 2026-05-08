@@ -1,4 +1,4 @@
 interface:
   display_name: "GoGoGo"
-  short_description: "同步 main、查根因、过审查后直推的闭环模式"
-  default_prompt: "Use $gogogo to run the following request end to end: create or reuse an issue, sync local main before code changes, prove the root cause, avoid hardcoded symptom fixes, pass a pre-commit review gate, then merge back to main and push/deploy from main unless I explicitly ask for a PR flow."
+  short_description: "完整 main 发布、查根因、过审查、再部署的闭环模式"
+  default_prompt: "Use $gogogo to run the request end to end: create or reuse an issue, sync main before edits, prove the root cause, pass review, merge all worktree changes back to a clean validated main, and only push/deploy from complete main without stash or non-main cherry-pick releases."
