@@ -1,4 +1,4 @@
 interface:
   display_name: "GoGoGo"
-  short_description: "完整 main 发布、查根因、过审查、再部署的闭环模式"
-  default_prompt: "Use $gogogo to run the request end to end: create or reuse an issue, sync main before edits, prove the root cause, pass review, merge all worktree changes back to a clean validated main, and only push/deploy from complete main without stash or non-main cherry-pick releases."
+  short_description: "最新主线 worktree 开发、严格测试、版本递增与发布闭环"
+  default_prompt: "Use $gogogo to run the request end to end in a worktree based on freshly fetched mainline, pass strict tests and review, verify release/deploy tasks and automatic version increments, then integrate and deliver from clean validated mainline within the authorized scope."
