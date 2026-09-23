@@ -29,5 +29,5 @@ $skill-installer install https://github.com/LubyRuffy/zwell-skills/tree/main/ski
 - utm-vm-cross-platform-it：macOS 宿主机通过 UTM 编排 Linux/Windows/macOS VM 运行跨平台集成测试（保留 ci-* 命名与 ci/cipass 默认账号，优先 SSH，可选 WinRM，必要时 utmctl exec 兜底）。
     - 安装：`$skill-installer install https://github.com/LubyRuffy/zwell-skills/tree/main/skills/utm-vm-cross-platform-it`
 
-- release：为 Go 项目（CLI 工具、Wails 桌面应用、纯库）自动生成完整的发布基础设施，包括 `VERSION`、`Makefile`、`.goreleaser.yaml`，并提供一键发布流程说明。
+- release：为 Go 服务、CLI、库、Wails 桌面应用和 Capacitor 移动应用检查或配置发布链路；按项目现有契约补齐版本递增、严格测试、签名、上传及远端验收。
     - 安装：`$skill-installer install https://github.com/LubyRuffy/zwell-skills/tree/main/skills/release`

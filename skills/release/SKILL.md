@@ -1,405 +1,47 @@
 ---
 name: release
-description: 为 Go 项目（CLI 工具、Wails 桌面应用、纯库）自动生成完整的发布基础设施，包括 VERSION 文件、Makefile release 目标、.goreleaser.yaml 配置，并提供一键发布流程说明。当用户说"帮我配置发布""添加 release 流程""setup goreleaser""初始化发布""generate release config"或需要为项目搭建版本管理与发布能力时触发。
+description: 为 Go 服务、CLI、库、Wails 桌面应用和 Capacitor 移动应用设计或修复发布能力。适用于配置版本管理、Make/Wails 发布任务、GoReleaser、GitHub Release、服务端部署或 Android/iOS 发布流程；先核对现有契约与实际入口，再按交付端补齐构建、测试、版本递增、上传和验收。
 ---
 
-# Release Skill
+# Release
 
-为 Go 项目自动生成完整的发布基础设施，无需手动写配置。
+为目标项目建立**可验证的发布链路**。先判断用户要配置发布基础设施、修复现有任务、执行一次发布，还是只审查现状；只做本次请求授权的动作。生成本地构建产物、创建 Git tag、上传 GitHub Release、部署服务和提交应用商店是不同阶段，不能互相代替。
 
-## 执行流程
+## 先查现状
 
-### 第一步：探查项目类型
+1. 读取项目及子目录的 `AGENTS.md`、架构、发布文档、Git 状态和远端。查看真实用户入口：服务/CLI 命令、Wails 原生窗口、Capacitor iOS/Android 工程，以及库的公开 API。一个仓库可同时包含多个交付端；不要因为有 `frontend/` 或 Darwin Go 二进制就判定有桌面应用，也不要因为有移动工程就默认它已经能发布。
+2. 沿 `Makefile` 及 include、Wails 3 任务配置、Gradle/Xcode 构建设置、脚本、GoReleaser 配置和 CI workflow 追踪目标的真实副作用。列出每个交付端的构建入口、测试门禁、版本来源、产物、签名、上传渠道和可观察的成功结果。任务名只是线索：`build`、`release` 或 `deploy` 不证明任务会上传或投产。检查发布产物的消费者，包括自动更新客户端要求的 tag、附件名、签名和版本比较方式。
+3. 已有 `VERSION`、tag 派生版本、包版本、CI 发布或部署流程时，优先修正现有链路。不要覆盖合理配置、创建平行版本来源，或把项目明确的滚动发布、受保护主线、平台支持范围改成通用模板。代码、测试与文档冲突时先查明当前有效契约，再改实现。
+4. 如果所需发布端缺少任务，明确指出缺哪个构建、签名、上传或验收环节。用户要求**配置发布能力**时，补齐所需环节；只要求审查时提供可执行差异，不触发发布。任何实际发布、部署、远端删除或覆盖都受用户授权范围约束。
 
-读取项目根目录，判断项目类型（可能同时属于多种）。建议优先级如下：
+## 公共发布门槛
 
-1. **Wails 桌面应用**：存在 `wails.json` 或 `build/config.yml`，且通常会存在 `wails` 相关脚本和 `frontend` 目录。
-2. **单二进制 CLI**：根目录存在 `main.go`，或 `cmd/` 下仅一个 `main.go` 主入口。
-3. **多二进制 CLI**：`cmd/` 下存在多个子目录，每个子目录有独立 `main.go`。
-4. **Go 库**：存在 `go.mod`，但上述二进制入口均不存在，且通常只包含 `*.go` 库源码。
+- 以项目默认分支和正确远端为准。发布前实时 fetch，确认候选提交包含预期工作，且工作区干净；遵守项目的 PR、分支保护和签名规则。不能自动 `git add -A`、提交无关改动、stash、强推或只搬运部分改动组成发布。版本变更属于候选提交；脚本不得在验证完成后偷偷修改源码再发布。
+- 将发布分成**无副作用 preflight → 版本分配 → 最终候选测试/构建 → 发布 → 远端验收**。preflight 先检查便宜且易失败的条件，如分支、干净状态、凭据是否可用、版本/tag 冲突、签名环境和任务依赖，再运行耗时检查。版本或主线变化后必须对最终提交重跑受影响验证；发布前再次检查远端状态。
+- 运行项目要求的单元、集成、竞态、静态、类型、构建与 UI/E2E 检查，并对目标平台执行必要的真实运行验证。构建通过不能代替行为测试；部分平台缺少设备、SDK、签名或 CI 时，如实报告未验证，不能把跳过算通过。
+- 发布脚本必须在任一构建、签名、push、上传或验证步骤失败时返回非零，不能在失败后打印成功。shell 中显式检查多命令、pipeline 和清理步骤的退出状态；清理不能覆盖原错误。新增或修复脚本时用隔离的假工具/临时仓库验证失败传播、版本冲突、重试及不会误删其他 Release。
+- 使用项目已有的版本格式和单一权威来源，并让构建配置、Git tag、可执行文件、桌面包和手机包派生同一候选版本，除非项目明确规定各端独立版本。**新版本必须高于同渠道已发布版本且未占用**；按数字组件比较，不用字符串排序。补丁/次版本/主版本由项目规则或明确请求决定；版本分配应由受测试的任务自动完成，不依赖人手修改多个文件。查询远端 tag、Release、应用商店构建号后再分配；冲突时重新分配并重新构建验证。Android 版本到 `versionCode` 的映射须测试 patch 达到三位数、minor 进位和同一 tag 后续提交等边界，不能让两个不同构建得到相同构建号。
+- 重试同一提交的失败发布时，先查远端已完成步骤；安全、幂等的重试复用原版本，不因每次重跑而自增。已经对外发布且内容变化时一般分配新版本。若项目**明确**采用可变 tag/滚动替换，遵守其契约，并检验所有客户端的更新机制是否会识别同版本新产物；移动端版本比较只看版本号时，必须递增版本才能让更新可见。未经项目授权不得删除现有 tag、Release、附件或其他 draft。
+- 记录候选源码 SHA、目标 tag、产物校验值和发布渠道；发布后从真实远端检查 tag 指向、附件/镜像或商店构建、下载可用性及对应版本。CLI/库需验证用户实际获取方式；服务端部署需验证运行版本、健康与关键路径。CI 入队、脚本退出 0、本地产物存在均不足以宣称已发布。
 
-同时收集：
-- `go.mod` 中的 `module` 路径（用于 ldflags）
-- `go.mod` 中的 Go 版本
-- `cmd/` 下各子目录名（多二进制项目）
-- GitHub remote URL（推断 `owner/repo`）
-- 是否已存在 `VERSION`、`Makefile`、`.goreleaser.yaml`
+## 按交付端完成链路
 
-> 提示：若项目包含子模块（`go.work`）或 `cmd/` 目录中既有样例/实验子命令，建议手动确认最终目标文件（CLI/库/Wails）以免误判。
+| 交付端 | 必须查明或补齐的行为 | 交付验收 |
+| --- | --- | --- |
+| 服务端 | 构建可部署产物及必要配置；发布任务与 `make deploy` 或等价部署任务的边界；认证、健康检查、回滚/恢复约束 | 远端实际运行的版本、健康、关键业务路径及持久写入符合项目要求 |
+| CLI | 目标系统/架构、归档、校验值和安装入口；可用 GoReleaser 或现有任务 | 下载归档，校验并运行 `version` / 关键命令 |
+| Go 库 | 兼容性检查、模块路径和 tag；无需为纯库虚构二进制或 GoReleaser 配置 | 新 tag 可被目标模块工具解析，公开 API 测试通过 |
+| Wails 桌面 | 按实际 Wails 3/项目任务构建完整原生应用；嵌入前端和资源，核对平台、包标识、版本、签名及目标渠道要求 | 目标平台的安装包已上传且可下载、安装和启动；裸 Go 二进制或运行时缓存 `.app` 不算分发包 |
+| Android | Capacitor sync、Gradle release 产物、签名配置、APK/AAB 区分；按发布渠道分配严格递增 `versionCode` 并核对 `versionName` | GitHub sideload APK 或商店 AAB 已上传到指定渠道，签名与既有安装版本兼容，安装/升级可用 |
+| iOS | Capacitor sync、Xcode archive/export、包标识、签名/描述文件、`MARKETING_VERSION` 和严格递增的 build number | IPA/TestFlight/App Store 或明确约定的渠道已有构建，安装/升级与版本显示通过 |
 
-### 第二步：生成文件
+项目可能只发布其中一部分端。不要把 Android sideload 的 debug 签名 APK 当作 Play 可上传 AAB，也不要把 `cap open ios` 当作 iOS 发布。桌面端若只支持 macOS，就验证 macOS；不要凭模板承诺 Windows/Linux。原生包签名、notarization、公证或商店审核按目标渠道实际要求处理，不对所有平台硬套同一流程。
 
-根据项目类型生成或追加以下文件，**已存在且内容合理则跳过**：
+多端共用一个 GitHub Release 时，先确定是同一个版本发布还是独立节奏：同版本发布应校验必需端的全部附件齐备；独立节奏应明确 tag/渠道和更新查询方式，避免某一端看到没有其附件的“最新版本”。上传文件名、下载 URL、签名身份及版本格式必须匹配客户端自动更新的解析规则；发布后用实际 Release 响应验证更新提示与下载路径，而不是只测试构造出的假响应。
 
-1. `VERSION` — 版本号单一来源
-2. `Makefile` — 版本管理与发布目标
-3. `.goreleaser.yaml` — 构建与发布配置
-4. （可选）`.github/workflows/release.yml` — 手动触发的 CI 发布
+## 生成与验证约束
 
-### 约束说明（非高风险优化项）
-
-- `VERSION` 采用 `x.y.z` 的三段语义化版本（如 `0.1.2`）。若项目有 `v1.2.3-beta` 等预发布需求，可在此基础上再扩展脚本，但当前模板默认不直接支持。
-- 对不满足语义化格式的版本号，先修正后再执行 bump/release，避免 `awk` 计算偏差。
-- Wails 与纯 CLI 项目共享 `release` 流程逻辑时，建议明确分开 `RELEASE_TYPE`（例如 `cli`/`wails`）进行定制，减少误配置风险。
-
----
-
-## 生成模板
-
-### VERSION 文件
-
-```
-0.0.1
-```
-
----
-
-### Makefile（追加到现有文件，或新建）
-
-```makefile
-SHELL   := /bin/bash
-VERSION := $(shell cat VERSION 2>/dev/null | tr -d '[:space:]')
-TAG     := v$(VERSION)
-REPO    := $(shell git remote get-url origin 2>/dev/null | sed 's|.*github.com[:/]\(.*\)\.git|\1|;s|.*github.com[:/]\(.*\)|\1|')
-SEMVER_RE := ^[0-9]+\.[0-9]+\.[0-9]+$
-
-.PHONY: version bump-patch bump-minor bump-major \
-        release-check release-dry release version-check
-
-# ── 版本查看 ──
-version:
-	@echo $(TAG)
-
-# ── 语义化版本校验 ──
-version-check:
-	@if ! echo $(VERSION) | grep -Eq "$(SEMVER_RE)"; then \
-		echo "❌ VERSION 格式不合法：必须为 x.y.z（例如 1.2.3）"; \
-		exit 1; \
-	fi
-
-# ── 版本号递增 ──
-bump-patch:
-	@echo $$(echo $(VERSION) | awk -F. '{printf "%d.%d.%d", $$1, $$2, $$3+1}') > VERSION
-	@echo "VERSION → v$$(cat VERSION | tr -d '[:space:]')"
-
-bump-minor:
-	@echo $$(echo $(VERSION) | awk -F. '{printf "%d.%d.0", $$1, $$2+1}') > VERSION
-	@echo "VERSION → v$$(cat VERSION | tr -d '[:space:]')"
-
-bump-major:
-	@echo $$(echo $(VERSION) | awk -F. '{printf "%d.0.0", $$1+1}') > VERSION
-	@echo "VERSION → v$$(cat VERSION | tr -d '[:space:]')"
-
-# ── 验证 goreleaser 配置 ──
-release-check:
-	goreleaser check
-	@$(MAKE) version-check
-
-# ── 快照构建（不推送、不发布） ──
-release-dry:
-	@echo "📦 快照构建（不发布）…"
-	@$(MAKE) version-check
-	@GITHUB_TOKEN=$${GITHUB_TOKEN:-$$(gh auth token)} goreleaser release --snapshot --clean --skip=publish
-
-# ── 一键发布 ──
-release:
-	@test -n "$(VERSION)" || { echo "❌ VERSION 文件为空"; exit 1; }
-	@$(MAKE) version-check
-	@test "$$(git branch --show-current)" = "main" || { echo "❌ 当前不在 main 分支"; exit 1; }
-	@command -v goreleaser >/dev/null 2>&1 || { echo "❌ 未找到 goreleaser: https://goreleaser.com/install"; exit 1; }
-	@command -v gh >/dev/null 2>&1 || { echo "❌ 未找到 gh CLI: https://cli.github.com"; exit 1; }
-	@gh auth status -h github.com >/dev/null 2>&1 || { echo "❌ gh 未登录，请执行 gh auth login"; exit 1; }
-	@if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$$(git ls-files --others --exclude-standard)" ]; then \
-		echo "📝 提交工作区变更…"; \
-		git add -A && git commit -m "chore: prepare release $(TAG)"; \
-	fi
-	@TAG_CUR="v$$(cat VERSION | tr -d '[:space:]')"; \
-	if git tag -l "$$TAG_CUR" | grep -q "$$TAG_CUR"; then \
-		TAG_EPOCH=$$(git log -1 --format=%ct "$$TAG_CUR" 2>/dev/null || echo 0); \
-		NOW_EPOCH=$$(date +%s); \
-		AGE=$$(( NOW_EPOCH - TAG_EPOCH )); \
-		if [ "$$AGE" -gt 86400 ]; then \
-			echo "⏰ $$TAG_CUR 已存在且超过 1 天，自动递增补丁版本…"; \
-			NEW_VER=$$(cat VERSION | tr -d '[:space:]' | awk -F. '{printf "%d.%d.%d", $$1, $$2, $$3+1}'); \
-			echo "$$NEW_VER" > VERSION; \
-			git add VERSION && git commit -m "chore: bump version to v$$NEW_VER"; \
-			TAG_CUR="v$$NEW_VER"; \
-		else \
-			echo "🏷️  $$TAG_CUR 已存在但不超过 1 天，覆盖…"; \
-			git tag -d "$$TAG_CUR"; \
-			git push origin ":refs/tags/$$TAG_CUR" 2>/dev/null || true; \
-		fi; \
-	fi; \
-	TAG_FINAL="v$$(cat VERSION | tr -d '[:space:]')"; \
-	echo "🏷️  创建标签 $$TAG_FINAL …"; \
-	git tag -a "$$TAG_FINAL" -m "release $$TAG_FINAL"; \
-	echo "🚀 推送到远端…"; \
-	git push origin main --tags; \
-	echo "📦 本地编译并发布 $$TAG_FINAL …"; \
-	GITHUB_TOKEN=$${GITHUB_TOKEN:-$$(gh auth token)} goreleaser release --clean; \
-	echo "🧹 清理残留 draft…"; \
-	for draft_id in $$(gh api repos/$(REPO)/releases --jq '.[] | select(.draft==true) | .id' 2>/dev/null); do \
-		gh api -X DELETE "repos/$(REPO)/releases/$$draft_id" 2>/dev/null || true; \
-	done; \
-	echo ""; \
-	echo "✅ $$TAG_FINAL 已发布: https://github.com/$(REPO)/releases/tag/$$TAG_FINAL"
-```
-
----
-
-### .goreleaser.yaml — CLI 工具（单二进制）
-
-```yaml
-# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-version: 2
-
-project_name: <BINARY_NAME>
-
-builds:
-  - id: <BINARY_NAME>
-    main: .         # 或 ./cmd/<BINARY_NAME>
-    binary: <BINARY_NAME>
-    goos: [linux, darwin, windows]
-    goarch: [amd64, arm64]
-    env:
-      - CGO_ENABLED=0
-    flags: [-trimpath, -buildvcs=false]
-    ldflags:
-      - -s -w
-      - -X main.Version={{ .Version }}
-      - -X main.Commit={{ .Commit }}
-      - -X main.BuildTime={{ .Date }}
-
-archives:
-  - id: default
-    formats: [tar.gz]
-    format_overrides:
-      - goos: windows
-        formats: [zip]
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-
-checksum:
-  name_template: checksums.txt
-
-snapshot:
-  version_template: "{{ incpatch .Version }}-next"
-
-changelog:
-  sort: asc
-  filters:
-    exclude: ['^docs:', '^test:', '^chore:']
-
-release:
-  github:
-    owner: <GITHUB_OWNER>
-    name: <GITHUB_REPO>
-  prerelease: auto
-  make_latest: true
-  name_template: "{{ .ProjectName }} {{ .Tag }}"
-```
-
----
-
-### .goreleaser.yaml — Wails 桌面应用（macOS arm64 示例）
-
-```yaml
-# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-version: 2
-
-project_name: <APP_NAME>
-dist: dist/goreleaser
-
-before:
-  hooks:
-    - sh -c 'cd <FRONTEND_DIR> && npm ci --no-audit --no-fund'
-    - sh -c 'cd <FRONTEND_DIR> && npm run build'
-
-builds:
-  - id: <APP_NAME>-darwin-arm64
-    dir: <DESKTOP_DIR>       # 含独立 go.mod 的桌面工程目录，如 cmd/myapp
-    main: .
-    binary: <APP_NAME>
-    goos: [darwin]
-    goarch: [arm64]
-    env:
-      - CGO_ENABLED=1
-      - MACOSX_DEPLOYMENT_TARGET=10.15
-      - CGO_CFLAGS=-mmacosx-version-min=10.15
-      - CGO_LDFLAGS=-mmacosx-version-min=10.15
-    tags: [with_clash_api, with_gvisor]    # 按项目实际 build tags 调整
-    flags: [-trimpath, -buildvcs=false]
-    ldflags:
-      - -s -w
-      - -X <MODULE_PATH>/internal/server.BackendVersion={{ .Version }}
-      - -X <MODULE_PATH>/internal/server.BuildCommit={{ .Commit }}
-      - -X <MODULE_PATH>/internal/server.BuildTime={{ .Date }}
-    hooks:
-      post:
-        - sh -c 'scripts/package-macos-app-goreleaser.sh "{{ .Path }}" "{{ .Version }}" "{{ .Os }}" "{{ .Arch }}"'
-
-archives:
-  - id: <APP_NAME>-archive
-    ids: [<APP_NAME>-darwin-arm64]
-    formats: [none]
-
-checksum:
-  name_template: checksums.txt
-  extra_files:
-    - glob: ./dist/goreleaser/<APP_NAME>_*_darwin_arm64_app.zip
-
-snapshot:
-  version_template: "{{ incpatch .Version }}-next"
-
-changelog:
-  sort: asc
-
-release:
-  extra_files:
-    - glob: ./dist/goreleaser/<APP_NAME>_*_darwin_arm64_app.zip
-  github:
-    owner: <GITHUB_OWNER>
-    name: <GITHUB_REPO>
-  prerelease: auto
-  make_latest: true
-  name_template: "<APP_DISPLAY_NAME> {{ .Tag }}"
-```
-
-> Wails 项目不需要调用 `wails3 build` 命令；goreleaser 直接调用 `go build`，只需确保 `frontend/bindings/` 已通过 `wails3 generate bindings` 更新。
-
----
-
-### .github/workflows/release.yml（可选，手动触发）
-
-### Wails/CGo 项目（推荐）
-
-```yaml
-name: release
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  packages: write
-
-concurrency:
-  group: release-workflow
-  cancel-in-progress: false
-
-defaults:
-  run:
-    shell: bash
-
-jobs:
-  release:
-    runs-on: macos-latest   # Wails/CGO 项目；纯 CLI 可改为 ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with: { node-version: '20' }   # Wails 项目需要；CLI 可删除
-      - uses: goreleaser/goreleaser-action@v6
-        with:
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
-> 推送 `v*` tag **不**自动触发此 workflow（`workflow_dispatch` 仅手动触发），避免与本地 `make release` 竞争。
-
-### 纯 CLI 建议
-
-```yaml
-name: release
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  release:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - uses: goreleaser/goreleaser-action@v6
-        with:
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
-> Wails 项目可先执行前端构建步骤，再执行 goreleaser；纯 CLI 可去掉 Node 相关步骤。
-
----
-
-## 占位符替换说明
-
-生成文件后，根据实际项目替换以下占位符：
-
-| 占位符 | 替换为 |
-|--------|--------|
-| `<BINARY_NAME>` | 可执行文件名，如 `mytool` |
-| `<APP_NAME>` | 应用名，如 `myapp` |
-| `<APP_DISPLAY_NAME>` | GitHub Release 展示名，如 `My App` |
-| `<FRONTEND_DIR>` | 前端目录路径，如 `cmd/myapp/frontend` |
-| `<DESKTOP_DIR>` | 桌面端 Go 工程目录，如 `cmd/myapp` |
-| `<MODULE_PATH>` | go.mod 中的 module 路径 |
-| `<GITHUB_OWNER>` | GitHub 用户名或组织名 |
-| `<GITHUB_REPO>` | GitHub 仓库名 |
-
-可通过以下命令自动获取：
-
-```bash
-# module 路径
-head -1 go.mod | awk '{print $2}'
-
-# GitHub owner/repo
-git remote get-url origin | sed 's|.*github.com[:/]\(.*\)\.git|\1|;s|.*github.com[:/]\(.*\)|\1|'
-```
-
----
-
-## 前置工具检查
-
-```bash
-# 安装 goreleaser（macOS）
-brew install goreleaser
-
-# 安装 gh CLI（macOS）
-brew install gh
-
-# 登录 GitHub
-gh auth login
-```
-
-补充校验（推荐）：
-
-```bash
-make version-check
-make release-check
-make release-dry
-```
-
----
-
-## 日常使用速查
-
-```bash
-make version          # 查看当前版本
-make bump-patch       # 0.0.1 → 0.0.2
-make bump-minor       # 0.0.1 → 0.1.0
-make bump-major       # 0.0.1 → 1.0.0
-make release-check    # 验证 .goreleaser.yaml 语法
-make release-dry      # 本地构建快照（不发布）
-make release          # 一键打 tag → 编译 → 发布
-```
+- 仅在确实需要时创建或修改 `VERSION`、Makefile、脚本、GoReleaser 配置或 CI。优先复用项目任务和版本源；不要把一个固定 Makefile 模板追加到所有仓库。对有客户端原生构建的项目，GoReleaser 可以负责 GitHub 发布，但不能假设 `go build` 自然生成可分发的 Wails 安装包或移动包。
+- 发布任务示例名称如 `make release`、`make deploy`、`make desktop-release`、`make mobile-android-release` 只用于查找。最终文档必须写项目真实命令、平台、凭据来源、输出、上传渠道、版本规则、失败/重试方式和验证命令。
+- 把新增或更改的发布行为写入项目用户文档、Feature/Contract 清单与 CHANGELOG（若项目维护这些文件），保持入口、任务、产物和版本规则一致。
+- 配置完成后先执行配置/脚本校验和无上传的快照构建，再运行项目完整测试门槛及发布脚本的故障注入测试；检查产物内容和版本一致性。只有用户授权实际发布时才创建 tag、上传、部署或提交商店；未授权时以验证通过的候选和准确的下一步结束。
