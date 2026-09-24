@@ -1,4 +1,4 @@
 interface:
   display_name: "GoGoGo"
-  short_description: "最新主线 worktree 开发、严格测试、版本递增与发布闭环"
-  default_prompt: "Use $gogogo to run the request end to end in a worktree based on freshly fetched mainline, pass strict tests and review, verify release/deploy tasks and automatic version increments, then integrate and deliver from clean validated mainline within the authorized scope."
+  short_description: "最新主线 worktree 开发、先推送分支、再同步 main 交付"
+  default_prompt: "Use $gogogo to work from a freshly fetched mainline in a worktree, pass tests and review, commit and push the development branch first, then sync and integrate local main, revalidate, push main, and deliver within the authorized scope."
