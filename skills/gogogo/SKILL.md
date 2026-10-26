@@ -1,6 +1,6 @@
 ---
 name: gogogo
-description: 完整闭环执行模式，适用于用户说“gogogo”“直接一路做完”“不要每步确认”或“跑完整个流程”。复用或创建 issue，从最新主线创建独立 worktree 分支，严格测试并审查后提交、推送开发分支，再同步本地 main、集成并验证，最后从完整主线交付；检查发布入口及版本递增。仅编辑本技能不代表启用该执行模式。
+description: 完整闭环执行模式，适用于用户说“gogogo”“直接一路做完”“不要每步确认”或“跑完整个流程”。从最新主线创建独立 worktree，测试审查后先推送开发分支，再集成并推送主线；每次收尾必须验证用户启动目录、本地主线与远端主线 SHA 一致、领先落后均为 0。检查发布入口及版本递增。仅编辑本技能不代表启用该执行模式。
 ---
 
 # Gogogo
@@ -13,29 +13,80 @@ description: 完整闭环执行模式，适用于用户说“gogogo”“直接�
 
 本文的“主线”默认是 `main`；先确认项目约定的真实主分支与对应远端，不得硬造 `main` 或假定远端一定是 `origin`。已有授权持续有效；完整闭环不扩大用户授权的目标环境、发布渠道或操作范围。单纯修改技能内容不授权创建 issue、推送或部署本技能仓库。
 
+**每次功能开发或修复的完成条件都包含本地主线同步，与本次是否发布无关。** 用户平时启动项目的工作区必须实际处于已同步的主线；只更新远端、远端跟踪引用或开发 worktree，不能代替更新这个目录。必需的同步未完成时，任务仍未完成。
+
 ## 闭环流程
 
-1. 读取项目规则、Git 状态、worktree 列表和真实入口，明确验收标准；已有 issue 引用就复用，否则为任务创建追踪 issue。
+1. 读取项目规则、Git 状态、worktree 列表和真实入口，记录用户日常启动目录、主线所在工作区、主分支和正确远端，明确验收标准；已有 issue 引用就复用，否则为任务创建追踪 issue。
 2. 按“最新主线与 worktree”完成同步和隔离，再开始编辑。
 3. 在开发前检查构建、测试、发布与部署任务，明确各交付端、版本来源及缺失项，避免到发布阶段才发现没有入口。
 4. 复现缺陷或确认新功能的目标行为，追踪真实调用链和根因；先观察目标测试失败，再做最小实现。
 5. 执行严格测试门槛，同步受影响的功能、契约、使用文档和 CHANGELOG，完成提交前 review。
 6. 在开发分支提交本次变更；推送前重新 fetch 远端主线，若它已前进，则安全地把最新主线纳入开发分支，解决冲突并重跑受影响验证与 review。
 7. 推送开发分支到正确远端，首次推送时设置 upstream，核对远端分支指向本次已验证提交；若同名远端分支已属于其他工作，先调查或换名，不覆盖。项目要求 PR/CI 时按项目流程完成并等待门禁。推送分支不代表已合入或已发布。
-8. **开发分支推送成功后**，安全同步本地 `main` 到远端最新，再把完整分支结果集成到本地 `main`；在最终主线候选上重跑必要验证并通过 review，推送 `main` 后核对远端提交。受保护主线按项目规定合入，并在本地同步合入后的主线。
+8. **开发分支推送成功后**，按下文规则处理本地主线的落后、领先或分叉，再集成完整任务结果；在最终主线候选上重跑必要验证并通过 review，推送主线后同步用户启动目录并执行“主线同步完成门槛”。受保护主线等待项目合入和 CI 成功后，仍须拉取合入后的主线到本地。
 9. 从完整主线通过实际发布/部署入口交付，验证版本、产物与远端结果。
-10. 交付验收通过后关闭 issue，清理本任务已集成且干净的 worktree 和本地分支；存在未交付工作时保留现场并说明状态。
+10. 交付验收及清理后，再执行一次“主线同步完成门槛”，通过后才关闭 issue、报告完成；存在未交付工作或本地主线未同步时保留现场并说明状态。
 
 ## 最新主线与 worktree
 
 - **首次编辑前必须成功获取远端最新主线**：先执行针对正确远端的 `git fetch --prune` 或项目规定的等价流程，核对远端主线 SHA。网络失败或无法确认最新状态时，不以旧的远端跟踪引用冒充最新基线。
-- 本地主线干净且可安全操作时，在其所在工作区执行 `git pull --ff-only` 或等价快进同步。主线有未提交改动、被其他任务使用或已分叉时，保留现场，直接以本次 fetch 得到的远端主线提交建立独立 worktree，无需先修改原工作区。
+- 通过 `git worktree list --porcelain` 找到本地主线的实际工作区，并确认它与用户日常启动目录的关系。不能在另一个 clone、临时集成 worktree 或 detached HEAD 上同步后，声称用户启动目录已同步；若启动目录不在主线，仅在干净且无其他任务占用时安全切回主线，否则保留现场并记录阻塞。
+- 每次 fetch 后，用 `git rev-list --left-right --count <本地主线>...<远端跟踪主线>` 记录领先/落后数量。开发前先完成关系和独有内容调查，干净且仅落后时可立即快进；领先或分叉的主线合并与推送放在开发分支推送成功后的集成阶段，按下表处理。**“已分叉”是待调查状态，不能未经调查就当成无法处理的阻塞。**
+
+| 本地相对远端 | 必须执行的动作 |
+| --- | --- |
+| 领先 0、落后 0 | 核对主线工作区 HEAD 和干净状态。 |
+| 仅落后 | 在干净、无并发占用的主线工作区执行 `git merge --ff-only <远端跟踪主线>` 或等价快进同步。 |
+| 仅领先 | 审查每个本地独有提交的来源、授权和验证状态；全部可交付时，纳入最终主线验证与 review 后正常推送，不能只留在本地。 |
+| 同时领先、落后 | 审查两侧独有提交；本地独有内容全部属于已授权、可验证的交付范围时，以保留历史的 merge 纳入最新远端主线，解决冲突并验证，再按闭环流程正常推送。不能反复执行注定失败的 `pull --ff-only`，也不能只报告分叉后结束。 |
+
+- 独有提交审查不能仅凭提交标题或 patch 相似就认定可发布、已集成或可丢弃。本地主线有无关未完成提交、未提交改动或其他任务占用时，保留其提交和文件；可以先基于本次 fetch 的远端主线隔离开发，但必须持续记录本地主线同步未完成，不能因此豁免收尾门槛。
 - **默认使用独立 worktree 和任务分支**，例如 `git worktree add -b codex/<task> <path> <刚获取的远端主线提交>`。命令中的路径、远端和分支必须替换成已确认的实际值，不能使用 detached HEAD 承担开发。
 - 创建后检查所在路径、当前分支和基线 SHA；新分支 HEAD 应等于选定的最新主线 SHA。复用已有任务 worktree 时，先审查其中改动，再安全 merge/rebase 最新主线并验证其为当前分支祖先，不能直接在陈旧基线上继续写代码。
 - 不覆盖、删除、stash 或代交其他主体的改动，不强制重置分叉主线，不重写他人或已共享的提交。无法安全更新已有分支时，先隔离可独立完成的工作，再说明实际阻塞。
 - 推送开发分支前再次 fetch；若远端主线前进，先纳入分支并验证。首次推送后不 rebase 或改写已共享的分支提交；后续主线再前进时以安全 merge 纳入分支、重验并再次推送，随后才同步本地 `main`。推送被并发提交拒绝时重新获取、集成和验证，不 force push。持续变化导致无法稳定交付时保留成果并报告，不无限重试。
-- 开发分支推送后，检查本地 `main` 的工作区及其与远端主线的关系；干净且可快进时同步远端，再安全合入完整分支。若主工作区有其他任务的未提交改动、分叉或受保护分支规则阻止集成，不覆盖现场；保留已推送的开发分支，报告本地 `main` 尚未同步/集成，不能假装闭环已完成。
+- 任何主线修改和推送前，重新核对工作区、暂存区、HEAD 与远端状态，避免覆盖调查后的并发变化；主线集成与发布串行执行。保护分支的合入成功不豁免本地拉取；不能安全处理的独有提交、脏文件或并发占用才构成具体阻塞，应列出路径、提交和缺少的授权或验证，不能只写“主线已分叉”。
 - 更新主线会改变候选发布内容，之前对旧提交的测试不能作为新候选的放行证据。
+
+## 主线同步完成门槛
+
+集成推送后和最终收尾时都必须执行，并与该仓库的主线集成串行，检查期间不得另行切换分支或修改启动目录。先将 `main_worktree`、`main_branch`、`remote` 绑定为已确认的用户启动工作区、真实主分支和远端；以下检查在子 shell 中运行，任一步失败即未通过，不修改用户文件或本地主分支：
+
+```bash
+(
+  set -euo pipefail
+  git -C "$main_worktree" fetch "$remote" "refs/heads/$main_branch:refs/remotes/$remote/$main_branch"
+  task_branch="$(git -C "$main_worktree" symbolic-ref --quiet HEAD)"
+  task_head="$(git -C "$main_worktree" rev-parse HEAD)"
+  task_local="$(git -C "$main_worktree" rev-parse "refs/heads/$main_branch")"
+  task_tracking="$(git -C "$main_worktree" rev-parse "refs/remotes/$remote/$main_branch")"
+  task_server="$(git -C "$main_worktree" ls-remote --exit-code "$remote" "refs/heads/$main_branch" | cut -f1)"
+  printf 'worktree=%s\nbranch=%s\nHEAD=%s\nlocal=%s\ntracking=%s\nremote=%s\n' \
+    "$main_worktree" "$task_branch" "$task_head" "$task_local" "$task_tracking" "$task_server"
+  git -C "$main_worktree" rev-list --left-right --count "refs/heads/$main_branch...refs/remotes/$remote/$main_branch"
+  task_status="$(git -C "$main_worktree" status --porcelain=v1 --untracked-files=all)"
+  printf '%s\n' "$task_status"
+  test "$task_branch" = "refs/heads/$main_branch"
+  test "$task_head" = "$task_local"
+  test "$task_local" = "$task_tracking"
+  test "$task_tracking" = "$task_server"
+  test -z "$task_status"
+  task_final_status="$(git -C "$main_worktree" status --porcelain=v1 --untracked-files=all)"
+  test -z "$task_final_status"
+  test "$(git -C "$main_worktree" symbolic-ref --quiet HEAD)" = "$task_branch"
+  test "$(git -C "$main_worktree" rev-parse HEAD)" = "$task_head"
+  test "$(git -C "$main_worktree" rev-parse "refs/heads/$main_branch")" = "$task_local"
+  test "$(git -C "$main_worktree" rev-parse "refs/remotes/$remote/$main_branch")" = "$task_tracking"
+  task_final_server="$(git -C "$main_worktree" ls-remote --exit-code "$remote" "refs/heads/$main_branch" | cut -f1)"
+  printf 'remote_final=%s\n' "$task_final_server"
+  test "$task_final_server" = "$task_server"
+)
+```
+
+- 通过意味着启动目录 HEAD、本地主线、刚 fetch 的跟踪引用与直接查询的远端主线 SHA 完全一致，领先/落后均为 `0 0`，工作区和暂存区干净。本次完整结果必须已包含在该主线中；相等本身不能证明任务已合入，squash 合入须核对完整内容。
+- 检查末尾重读分支、HEAD、主线引用、状态及实际远端；任何采样变化均使本轮作废。远端在检查期间或收尾前前进时，重新获取、按上表同步并重跑受影响验证；不能拿先前的推送成功或旧 fetch 输出放行。连续三轮仍因并发变化无法稳定同步时保留成果，报告未完成及各轮 SHA，不无限重试。记录检查时间；该观测不承诺其他主体随后不再修改仓库。
+- 同步源码不等于正在运行的程序或线上版本已更新。任务要求本地运行或发布时，还须通过项目真实入口重建受影响产物并验证版本/源码身份；不得仅凭 SHA 相等宣称运行态或线上一致。
 
 ## 根因与实现约束
 
@@ -101,7 +152,7 @@ description: 完整闭环执行模式，适用于用户说“gogogo”“直接�
 - 集成后若存在其他主体待统一发布的内容，记录已集成到哪里，等待统一发布，不擅自接管其任务。
 - 发布验收检查实际远端状态：服务端健康、版本及关键业务路径；软件 Release 的 tag、源码提交、目标平台附件及安装/启动验证。仅推送成功、脚本退出 0 或本地产物存在均不足以宣称交付。
 - 只清理本任务创建、已证实完整集成且无未提交/未跟踪成果的 worktree 和本地分支。squash 集成需核对内容，不能因普通删除命令拒绝就强制删除；已推送的远端开发分支按项目清理规则或用户要求处理，不因本地合并就擅自删除。不清理用户或其他任务资源。
-- 最终报告区分已实现、已验证、已集成、已推送、已部署/发布和阻塞状态，附对应证据；未通过必需验收时不关闭 issue、不声称完成。
+- 最终报告区分已实现、已验证、已集成、已推送、已部署/发布和阻塞状态；必须列出用户启动目录、当前分支、本地与远端主线 SHA、领先/落后数量和干净状态，以及本次结果已合入的证据。主线同步门槛或必需验收未通过时，不关闭 issue、不声称完成。
 
 ## 阻断规则
 
