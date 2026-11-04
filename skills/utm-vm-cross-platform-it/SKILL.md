@@ -1,89 +1,27 @@
 ---
 name: utm-vm-cross-platform-it
-description: Design and implement cross-platform integration testing for Go projects, orchestrated from a macOS host using UTM virtual machines (Linux/Windows/macOS guests) via utmctl + SSH/WinRM. Use when you need real system-level integration tests across OSes (certificate/trust store, drivers, installers, privileged operations), especially on Apple Silicon, while keeping CI conventions like ci-Windows/ci-Linux/ci-macOS naming and default ci/cipass accounts. SSH and WinRM should be implemented directly in Go (no Python dependencies such as pywinrm).
+description: Run or design UTM guest integration tests from macOS, recover guest access when SSH fails, and verify native macOS release candidates in the guest. Applies to Linux, Windows and macOS VMs, including Go system tests and ci-macOS GUI acceptance.
 ---
 
-# UTM VM 跨平台集成测试（宿主机编排）
+# UTM 来宾集成测试与原生验收
 
-## 目标
+宿主负责编排、传输和收集证据。需要验证的系统动作或原生界面在目标来宾中执行。先读项目现有入口、授权、验收标准和资源互斥规则。
 
-在 macOS 宿主机上，用 UTM 启动/控制 Linux、Windows（可选 macOS）虚拟机，并在 guest 内执行真实集成测试；宿主机负责“编排与触发”，guest 负责“实际系统级动作”。要求保留 CI 约定：VM 命名 `ci-Windows/ci-Linux/ci-macOS`（或 `ci-os-*`），默认账号 `ci/cipass`，优先 SSH，Windows 可选 WinRM，必要时 `utmctl exec` 兜底。
+## 选择路径
 
-本技能默认面向 **Go（Golang）项目**：宿主机侧的编排器、远程执行（SSH/WinRM）、日志采集与超时控制，尽量都用 **Go 代码直接实现**；避免引入 Python 运行时与 `pywinrm` 这类依赖。
+- **系统集成测试**（信任库、安装器、驱动、服务或权限）：优先复用现有来宾执行入口。新建 Go 编排器时用 Go 实现 SSH／WinRM，按需读[前置条件](references/requirements.md)和 [Go 编排骨架](references/go-pattern.md)。
+- **Mac 原生验收**：使用项目指定的 UTM 来宾（通常是 `ci-macOS`）、原生 runner 和验收审计器。预先完成构建和输入校验，冻结版本、源码、包名及 SHA-256。串行跑受影响场景，保留原始窗口图、实际操作和结果、适用的 AX／Trace、终局与清理证据。用审计器的实际状态与原件判定通过，退出码为零也可能仍待验收。进程、HTTP、SSH、模拟器或宿主界面不能代替来宾原生行为。
+- **访问失败**：先确认掉在哪一层，再切换到已证实具备所需能力的通道。读 [UTM 能力与网络发现](references/utmctl-and-ip-discovery.md)。Mac 锁屏、黑帧、共享网络失联或有待收尾的用例时，读 [Mac 来宾恢复与验收](references/macos-recovery.md)。
 
-## 工作流（按顺序执行）
+## 执行边界
 
-### 1. 明确范围与成功标准
+1. 用当前 VM UUID、后端、状态和项目的来宾身份配置绑定目标。名称、旧 IP 和扫描结果只用来定位候选。SSH 核对可信主机密钥和来宾身份，Windows 仅在已配置时用 WinRM。UTM Guest Agent 命令按后端和实际探针结果准入，退出码为零仍要检查错误流和有效回执。
+2. 分别确认连接、命令执行、GUI 会话及原生行为的证据。SSH 失败后可走已授权的共享文件夹执行队列或现有 UTM 来宾控制台。诊断信箱和挂载本身只证明各自的能力。
+3. 已有授权且控制台可用时，执行者自行恢复指定来宾的 CI 会话。核对当前窗口与画面，必要时先唤醒来宾，在有效期内通过现有安全通道输入一次。宿主锁屏、权限拒绝和来宾登录状态分别判断。
+4. 使用项目已有的宿主和来宾锁，遵守原有时限。每个用例拥有独立包副本、数据和子进程。先保留原始失败，再等待自有进程退出并证明资源清理，随后才开始新用例。超时且结果未知时按原请求查证，不重放输入。仍无可用通道时记录具体阻塞，继续独立可推进的工作。
 
-- 明确“宿主机 OS”：默认只支持 macOS 宿主机（UTM + utmctl）。若用户要求 Linux 宿主机，说明不属于本技能的默认路径。
-- 明确“需要覆盖的 guest OS”：Linux / Windows / macOS；以及是否要三平台一次性编排（类似 `all_platform`）。
-- 明确“集成测试要验证的系统动作”：例如系统信任库、系统证书存储、安装器、服务管理、权限提升等。
-- 明确“可重复性与观测性要求”：必须 `-v` 输出；必须可设置超时；失败要能定位到是“启动/找 IP/连不上/权限不足/测试失败”。
+## 兼容与凭据
 
-### 2. 固化命名与默认账号（强约定）
+沿用既有 CI 配置和[命名约定](references/naming-and-defaults.md)。新流程优先使用配置中的密钥或私有凭据来源，凭据只走既有的内存或标准输入通道。下行供仍读取本文件的旧测试工具兼容，仅用于已经授权、明确预置该值的隔离 CI 镜像。不得将它用于猜测登录、初始化其他镜像、命令行示例或证据。
 
-- VM 名称与 hostname：默认用 `ci-Windows`、`ci-Linux`、`ci-macOS`（或 `ci-os-windows`/`ci-os-linux`/`ci-os-macos`），并在自动选择时优先 `ci-os*`，其次 `ci-*`。
-- 默认账号：`ci`；默认密码：`cipass`。
-
-把这些约定写进项目文档，并在代码里实现“可覆盖但有默认”的行为（环境变量/配置文件均可）。
-
-更细的建议见：`references/naming-and-defaults.md`。
-
-### 3. 选择触发通道：SSH 优先，WinRM/utmctl 兜底
-
-- Linux guest：优先 SSH（能 stream 输出、适配 sudo/root）；若 SSH 端口不通且 utmctl 存在，fallback `utmctl exec`。
-- Windows guest：优先 SSH（OpenSSH Server）；可选 WinRM（5985；认证按环境选择 NTLM/Kerberos，**通过 Go WinRM 客户端实现**）；两者都不可用时 fallback `utmctl exec`。
-- macOS guest：优先 SSH（规避部分后端对 `ip-address/exec` 的限制）。
-
-准备清单见：`references/requirements.md`。
-
-### 4. 实现 VM 发现、启动、获取 IP（可靠性优先）
-
-- `utmctl` 路径允许覆盖（默认 `/Applications/UTM.app/Contents/MacOS/utmctl`）。
-- VM 标识选择优先级：显式配置 > `utmctl list` 自动挑选（按 `ci-os*`/`ci-*`）> 磁盘猜测（Documents 下 `.utm` bundle）> 端口扫描兜底。
-- 获取 IP：`utmctl ip-address` 重试；遇到后端不支持或 AppleEvent/OSStatus 错误时，直接让上层走 fallback（扫描或 SSH 直连配置）。
-- 启动 VM：best-effort 先 `utmctl start --hide`，再 `utmctl start`（兼容 headless/交互差异）。
-
-实现要点见：`references/utmctl-and-ip-discovery.md`。
-
-### 5. 设计“宿主机编排测试”与“guest 内系统测试”的分层
-
-- 把系统级断言放到“guest 侧测试”（例如 Linux root 写 trust store、Windows 写证书存储）。
-- 宿主机侧只做：启动 VM、发现 IP、传输代码/定位 repo、远程执行命令、采集输出、做最小限度的健康检查。
-- 若项目是 Go：建议用 build tags 或等价机制区分。
-
-Go 的落地骨架见：`references/go-pattern.md`。
-
-### 6. 代码分发/同步（可选但常用）
-
-- 若 guest 里已预置 repo：通过配置 `*_REPO_DIR` 直接使用。
-- 若未预置：实现“宿主机打包并传输”的路径。
-  - Linux：tar.gz + SSH stdin 解压
-  - Windows：优先走 SSH/scp（若可用）；否则用 WinRM 执行 PowerShell，从宿主机临时 HTTP server 拉取 zip（宿主机 HTTP server 也建议用 Go 内置实现）
-
-### 7. 权限与凭据（必须可覆盖，默认可用）
-
-- Linux：优先 `sudo -n`；失败后可选 `sudo -S`（stdin 注入密码）。默认账号 `ci/cipass` 时，允许在 CI 自动兜底，但不要在日志里打印密码。
-- Windows：测试若需要管理员权限，要求 guest 侧账号具备管理员权限；WinRM/SSH 都用 `ci/cipass` 作为默认，但必须允许覆盖。
-
-### 8. 文档化与可运行命令
-
-- 输出一份“与业务无关”的独立文档（放到项目 `docs/`），内容至少包括：
-  - VM 命名与默认账号约定
-  - guest 侧前置条件（SSH/WinRM/Go/权限）
-  - 一键运行命令（包含 env vars）
-  - 常见失败与排障
-  - CI 运行形态建议（登录会话 vs no-login）
-
-### 9. 验证与回归
-
-- 修改代码后必须保证项目可编译、相关测试可通过。
-- 新增后端函数要补单测（如果项目有这类约束）。
-- 集成测试默认应可被显式开关控制（例如通过 env var 启用），避免本地开发误触发。
-
-## 参考资料（按需加载）
-
-- `references/requirements.md`：宿主机/guest 前置条件清单 
-- `references/naming-and-defaults.md`：`ci-*` 命名与 `ci/cipass` 约定、可覆盖策略 
-- `references/utmctl-and-ip-discovery.md`：utmctl 使用与 IP 发现/兜底策略 
-- `references/go-pattern.md`：Go 项目的推荐结构（build tags、编排测试/guest 测试分层、命令模板） 
+默认账号 `ci/cipass`

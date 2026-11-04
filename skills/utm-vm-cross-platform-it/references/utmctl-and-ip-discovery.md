@@ -1,58 +1,15 @@
-# utmctl 与 IP 发现（实现要点）
+# UTM 能力与网络发现
 
-## utmctl 路径
+## 先绑定 VM，再探测通道
 
-- 默认：`/Applications/UTM.app/Contents/MacOS/utmctl`
-- 必须允许覆盖：例如 `*_UTMCTL`（具体前缀按项目约定）
+- 使用项目配置或 `utmctl list` 找到唯一目标，再用 `utmctl status <UUID>` 读取精确状态。名称与 OS 只用于筛选。找不到唯一目标时，不靠磁盘名称或开放端口猜测。确认需要且有权启动时才启动准确 UUID。启动返回未知时读当前状态，避免重复启动。
+- `utmctl` 默认位于 `/Applications/UTM.app/Contents/MacOS/utmctl`。核对当前 UTM 后端和已安装版本的子命令能力。QEMU Guest Agent 的 `exec`、`file` 等需要已启用且响应的代理。不要把这些命令当成 Apple Virtualization 的兜底。对 `ip-address` 独立核实能力。只在配置了串口且证实有目标控制服务时才考虑 `attach`。
+- 探针使用无副作用的身份读取，保存命令、退出状态和两路输出。曾出现 `utmctl exec` 退出为 0、stderr 却报告 `Operation not supported by the backend`／OSStatus −2700。此时该通道不可用。区分后端不支持、权限拒绝、未就绪和未知超时，避免用重复命令处理确定性拒绝。
 
-## VM 标识
+## 地址是候选，身份由来宾证明
 
-建议支持两类标识：
+1. 先使用当前配置的 SSH／WinRM 地址。核对宿主路由、接口和真实 VM 网段。旧地址可能落到代理、VPN 或其他来宾。
+2. 按实际能力使用 Guest Agent、来宾内网卡读数、限定接口的 DHCP／ARP、mDNS 等发现候选。冷启动 DHCP 可以在一次有界等待中查询。仅在获准且已确认的 VM 子网内做限定探测，避免整网扫描。
+3. SSH 使用已固定的主机密钥，再核对来宾的 hostname、UID 和项目要求的网卡身份。WinRM 使用已配置并验证身份的端点。出现主机密钥或来宾身份不匹配时拒绝该候选，不覆盖信任记录或发送凭据。TCP 端口可达、旧 DHCP 表和 `sshd` 已监听分别只证明局部状态。
 
-- VM 名称（更好读）
-- VM UUID（更稳定）
-
-建议的选择优先级：
-
-1. 显式配置（例如 `*_UTM_WINDOWS_VM` / `*_UTM_LINUX_VM` / `*_UTM_DARWIN_VM` / `*_UTM_VM`）
-2. `utmctl list` 自动挑选：
-   - 优先 `ci-os*`，其次 `ci-*`
-   - 再按 OS 关键字（windows/linux/macos/darwin）选择
-3. 若 `utmctl list` 不可用：
-   - “磁盘猜测”常见 bundle 是否存在：
-     - `~/Library/Containers/com.utmapp.UTM/Data/Documents/<name>.utm`
-4. 仍失败：
-   - 端口/网段扫描兜底（见下）
-
-## 启动 VM
-
-- best-effort：尝试 `utmctl start --hide <vm>`，再尝试 `utmctl start <vm>`
-- 失败不要立即终止：很多场景下 VM 已经在运行或后端行为不一致
-
-## 获取 IP
-
-- 优先 `utmctl ip-address --hide <vm>`
-- 必须重试（VM 冷启动 DHCP 需要时间）
-- 解析输出时，兼容：
-  - 每行一个 IP
-  - 文本里夹杂 `192.168.64.10/24` 这种 CIDR token
-
-## 明确不可恢复错误，直接让上层 fallback
-
-常见不可恢复：
-
-- `Operation not supported by the backend.`
-- AppleEvent/OSStatus 类错误（例如权限/TCC/后端限制）
-
-这类错误重试没有意义，应直接回退到：
-
-- 用户显式提供 `*_SSH_HOST` / `*_WINRM_ENDPOINT`
-- 或走扫描兜底
-
-## 扫描兜底（只作为最后手段）
-
-- Windows WinRM：优先扫 5985
-- Windows SSH：扫 22
-- Linux/macOS SSH：扫 22
-
-扫描 CIDR 建议可配置（例如默认 `192.168.64.0/24`），并限制超时与并发，避免 CI 长时间 hang。
+参考 [UTM 命令行与脚本说明](https://docs.getutm.app/scripting/scripting/)、[脚本字典](https://docs.getutm.app/scripting/reference/)和[串口说明](https://docs.getutm.app/advanced/serial/)。

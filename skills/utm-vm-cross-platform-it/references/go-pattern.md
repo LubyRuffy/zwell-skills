@@ -57,14 +57,11 @@ Repo 路径：
 
 WinRM：
 
-- `${P}WINDOWS_WINRM_ENDPOINT`（默认 `http://<ip>:5985/wsman`）
+- `${P}WINDOWS_WINRM_ENDPOINT`（已配置并验证对端身份的 WinRM URL）
 - `${P}WINDOWS_WINRM_USER` / `${P}WINDOWS_WINRM_PASSWORD`
 - `${P}WINDOWS_HOST_IP`（宿主机在 UTM 网段的 IP，自动识别失败时手动指定）
 
-默认值建议：
-
-- user 默认 `ci`
-- password 默认 `cipass`（只作为 CI 兜底，必须可覆盖，且不要打印）
+账号按项目约定，凭据从现有私有配置或密钥存储注入。示例省略凭据参数。客户端在握手阶段验证对端身份，并在共享 deadline 内收集远程退出与清理结果。
 
 ## 命令模板（示例）
 
@@ -90,6 +87,5 @@ go test ./integration -tags integration -run TestUTMWindowsSSHIntegration -count
 ```bash
 ${P}WINDOWS_WINRM_INTEGRATION=1 \
 ${P}WINDOWS_WINRM_USER=ci \
-${P}WINDOWS_WINRM_PASSWORD=cipass \
 go test ./integration -tags integration -run TestUTMWindowsWinRMIntegration -count=1 -v
 ```

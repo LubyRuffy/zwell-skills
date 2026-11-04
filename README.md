@@ -48,7 +48,7 @@ npx skills add LubyRuffy/zwell-skills --skill gogogo --global --yes --agent <已
 - golang-quality-optimizer：Go 代码质量优化与简化（不改行为前提下重构、修 lint/staticcheck、补测试、并发与性能质量加固）。
     - 安装：`npx skills add LubyRuffy/zwell-skills --skill golang-quality-optimizer --global --yes`
 
-- utm-vm-cross-platform-it：macOS 宿主机通过 UTM 编排 Linux/Windows/macOS VM 运行跨平台集成测试（保留 ci-* 命名与 ci/cipass 默认账号，优先 SSH，可选 WinRM，必要时 utmctl exec 兜底）。
+- utm-vm-cross-platform-it：在 macOS 宿主机上用 UTM 编排 Linux、Windows 和 macOS 来宾测试。按实际通道能力恢复 SSH 失联或来宾锁屏，并在目标来宾中验证 Mac 正式包的原生行为。
     - 安装：`npx skills add LubyRuffy/zwell-skills --skill utm-vm-cross-platform-it --global --yes`
 
 - release：为 Go 服务、CLI、库、Wails 桌面应用和 Capacitor 移动应用检查或配置发布链路；按项目现有契约补齐版本递增、严格测试、签名、上传及远端验收。
