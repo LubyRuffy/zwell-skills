@@ -1,4 +1,4 @@
 interface:
   display_name: "GoGoGo"
-  short_description: "独立 worktree 开发交付，每次核验启动目录与本地、远端主线一致"
-  default_prompt: "Use $gogogo to develop in a worktree from freshly fetched mainline, pass tests and review, push the task branch, integrate and push mainline, and verify the user's launch checkout HEAD, local mainline, and live remote mainline have the same SHA with zero ahead/behind and a clean worktree before reporting completion."
+  short_description: "测试后必须通过形式化验收，再交付并核验启动目录与本地、远端主线一致"
+  default_prompt: "Use $gogogo to develop in a worktree from freshly fetched mainline, pass tests then machine-checked formal acceptance and review on the final candidate, push the task branch, integrate and push mainline, and verify the user's launch checkout HEAD, local mainline, and live remote mainline have the same SHA with zero ahead/behind and a clean worktree before reporting completion; report the verified properties, evidence, and proof limits."

@@ -36,7 +36,7 @@ npx skills add LubyRuffy/zwell-skills --skill gogogo --global --yes --agent <已
 
 ## 已有技能
 
-- gogogo：把后续请求切换为完整闭环执行模式；若已给 issue 编号或 URL 则跳过建 issue，否则先建 issue，再持续推进到实现、验证、review、集成、部署与收尾。主要用于**单人开发模式**，默认从刚拉取的最新主线创建独立 worktree 分支；严格测试和 review 后先提交并推送开发分支，再同步本地 main、合入和复验，最后从完整 main 推送与交付。每次任务无论是否发布，收尾都必须实测用户启动目录 HEAD、本地主线和远端主线 SHA 一致、领先/落后为 0 且工作区干净；分叉先审查并安全合并，存在无关工作时保留现场并报告同步未完成。开发前检查 Wails 3 / Make 等发布部署任务，缺少 PC 或移动端 Release 入口时提醒补齐，并验证发布版本自动递增。
+- gogogo：把后续请求切换为完整闭环执行模式；若已给 issue 编号或 URL 则跳过建 issue，否则先建 issue，再持续推进到实现、验证、review、集成、部署与收尾。主要用于**单人开发模式**，默认从刚拉取的最新主线创建独立 worktree 分支；严格测试通过后，必须对本次关键契约完成机器可检查的形式化验收，记录实现映射、候选身份、结果与证明边界，再通过 review、提交并推送开发分支，随后同步本地 main、合入和复验，最后从完整 main 推送与交付。形式化验收缺失、失败或结论不明确均未完成，普通测试不能替代；最终候选变化后须按“测试 → 形式化验收”重验。每次任务无论是否发布，收尾都必须实测用户启动目录 HEAD、本地主线和远端主线 SHA 一致、领先/落后为 0 且工作区干净；分叉先审查并安全合并，存在无关工作时保留现场并报告同步未完成。开发前检查 Wails 3 / Make 等发布部署任务，缺少 PC 或移动端 Release 入口时提醒补齐，并验证发布版本自动递增。
     - 安装：`npx skills add LubyRuffy/zwell-skills --skill gogogo --global --yes`
 
 - goglab：公司仓库 GitLab 闭环执行模式；通过 `go env GOPRIVATE` 排除 `github.com` 后识别公司仓库，使用 `glab` 管理 issue、分支、MR 与 CI，强制从最新主线切本地分支开发，禁止直推主分支，MR 提交后必须等 CI 通过才能算完。
