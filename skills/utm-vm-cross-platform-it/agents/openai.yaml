@@ -1,4 +1,4 @@
 interface:
   display_name: "UTM 跨平台集成与原生验收"
-  short_description: "编排 UTM 来宾集成测试、恢复来宾访问并验证 Mac 正式包的原生行为"
-  default_prompt: "使用 $utm-vm-cross-platform-it 按项目要求在已验证的 UTM 来宾中运行测试，按实际通道能力恢复访问，并保留验收和清理证据。"
+  short_description: "编排 UTM 来宾测试、恢复并交接桌面会话、验收 Mac 原生行为"
+  default_prompt: "使用 $utm-vm-cross-platform-it 按项目快路径准备并运行 UTM 来宾测试，必要时恢复和交接桌面会话，并保留原生行为及清理证据。"
