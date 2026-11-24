@@ -19,6 +19,10 @@ description: Run or design UTM integration tests for Linux, Windows and macOS gu
 2. 分别取得命令通道、当前桌面、实际执行主体的权限和原生行为证据。宿主锁屏时按已有授权查找独立通道。有可用通道时，把新鲜画面核验、必要登录、会话保持与 runner 启动放在同一次受控交接内。只有来宾原生窗口和本轮业务断言能验收原生行为。
 3. 使用项目已有的宿主和来宾锁与场景时限。每个用例拥有独立包副本、数据和子进程。先保留首错，再等待自有进程退出并确认清理，随后才开始新用例。超时且结果未知时查证原请求。准入受阻时保留具体原因和待验收状态，继续独立可推进的工作。
 
+## Terminal 生命周期硬门禁
+
+普通命令使用不分配 PTY 的已有 SSH／队列，不为每次探针新开 `.command`。必须使用来宾 Terminal 的原生测试，在首次启动前读取 [Terminal 所有权与清理](references/terminal-lifecycle.md)。测试 app 退出、`entry.exit`、`cleanup_complete=true` 不能单独证明外层 Terminal／PTY 已回收。上一轮外层清理失败或状态未知时，不再创建新终端。
+
 ## 兼容与凭据
 
 沿用既有 CI 配置和[命名约定](references/naming-and-defaults.md)。新流程从项目批准的私有来源取凭据，经已授权的内存或标准输入通道传递。下行是仍直接解析本文件的旧测试工具的兼容接口，仅供明确预置该值且已授权的隔离 CI 镜像使用。迁移旧工具到私有来源后再移除此接口。
