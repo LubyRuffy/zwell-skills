@@ -3,6 +3,7 @@
 Run inside a NEW dedicated guest Terminal tab; never in an existing/manual tab.
 """
 import argparse
+import errno
 import json
 import os
 from pathlib import Path
@@ -77,6 +78,31 @@ def group_alive(pgid):
         return False
 
 
+def require_waitid():
+    """Check the guardian's exact non-reaping wait without creating a child."""
+    waitid = getattr(os, 'waitid', None)
+    names = ('P_PID', 'WEXITED', 'WNOHANG', 'WNOWAIT', 'CLD_EXITED')
+    constants = [getattr(os, name, None) for name in names]
+    missing = [name for name, value in zip(names, constants) if not isinstance(value, int)]
+    if not callable(waitid):
+        missing.insert(0, 'waitid')
+    message = f'{sys.executable}: requires working os.waitid with WNOWAIT (CPython macOS 3.13+)'
+    if missing:
+        raise RuntimeError(f'{message}; missing: {", ".join(missing)}')
+    pid_type, exited, nohang, nowait, normal_exit = constants
+    flags = exited | nohang | nowait
+    try:
+        # Our PID cannot name one of our children; ECHILD is the safe result.
+        waitid(pid_type, os.getpid(), flags)
+    except OSError as exc:
+        if exc.errno == errno.ECHILD:
+            return waitid, pid_type, flags, normal_exit
+        raise RuntimeError(f'{message}; probe failed: {exc}') from exc
+    except NotImplementedError as exc:
+        raise RuntimeError(f'{message}; probe not implemented: {exc}') from exc
+    raise RuntimeError(f'{message}; probe did not report ECHILD')
+
+
 def stop_group(child):
     # Child remains unreaped until signals are sent: its PID cannot be reused.
     if group_alive(child.pid):
@@ -106,6 +132,7 @@ def guard(root, gate, tty, timeout, command, token=""):
     child = None
     clean_process = False
     try:
+        waitid, pid_type, wait_flags, normal_exit = require_waitid()
         with (root / 'stdout').open('wb') as out, (root / 'stderr').open('wb') as err:
             child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=out,
                                      stderr=err, start_new_session=True)
@@ -113,9 +140,9 @@ def guard(root, gate, tty, timeout, command, token=""):
             deadline = time.monotonic() + timeout
             # waitid WNOWAIT keeps the process identity reserved while we kill descendants.
             while True:
-                ended = os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+                ended = waitid(pid_type, child.pid, wait_flags)
                 if ended:
-                    result['command_exit'] = ended.si_status if ended.si_code == os.CLD_EXITED else -ended.si_status
+                    result['command_exit'] = ended.si_status if ended.si_code == normal_exit else -ended.si_status
                     result['reason'] = 'exited'
                     break
                 if (root / 'cancel').exists() or time.monotonic() >= deadline:
@@ -161,8 +188,17 @@ def main():
     a.state = a.state.expanduser().resolve()
     gate = a.state / 'active'
     if a.action == 'status':
-        print('blocked' if gate.exists() else 'ready')
-        return 1 if gate.exists() else 0
+        if gate.exists():
+            print('blocked')
+            return 1
+        try:
+            require_waitid()
+        except RuntimeError as exc:
+            print('blocked')
+            print(exc, file=sys.stderr)
+            return 1
+        print('ready')
+        return 0
     if a.action == 'cancel':
         owner = json.loads((gate / 'owner.json').read_text())
         Path(owner['evidence'], 'cancel').touch(exist_ok=True)
@@ -174,6 +210,10 @@ def main():
         parser.error('run requires macOS, a command, and timeout in (0, 3600]')
     if a.evidence is None:
         parser.error('--evidence is required')
+    try:
+        require_waitid()
+    except RuntimeError as exc:
+        parser.error(str(exc))
     tty = os.ttyname(0)
     token = 'utm-owned-' + uuid.uuid4().hex
     if terminal(tty, token=token, claim=True) != 'present':

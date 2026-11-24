@@ -1,4 +1,7 @@
+import errno
+import io
 import json
+from contextlib import redirect_stderr, redirect_stdout
 import os
 from pathlib import Path
 import subprocess
@@ -10,6 +13,60 @@ import terminal_session as m
 
 
 class TerminalLifecycle(unittest.TestCase):
+    def test_preopen_status_refuses_missing_waitid_or_flag(self):
+        for missing in ('waitid', 'WNOWAIT', 'CLD_EXITED'):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as state:
+                args = [m.__file__, 'status', '--state', state]
+                out, err = io.StringIO(), io.StringIO()
+                with patch.object(sys, 'argv', args), patch.object(os, 'waitid', create=True), \
+                     patch.object(os, missing, None, create=True), \
+                     patch.object(m, 'terminal') as terminal, patch.object(m.subprocess, 'Popen') as spawn, \
+                     redirect_stdout(out), redirect_stderr(err):
+                    self.assertEqual(m.main(), 1)
+                self.assertEqual(out.getvalue().strip(), 'blocked')
+                self.assertIn('missing: ' + missing, err.getvalue())
+                terminal.assert_not_called()
+                spawn.assert_not_called()
+                self.assertEqual(list(Path(state).iterdir()), [])
+
+    def test_preopen_status_uses_exact_nonreaping_wait(self):
+        for error, expected in ((errno.ECHILD, 'ready'), (errno.ENOSYS, 'blocked'), (errno.EINVAL, 'blocked')):
+            with self.subTest(error=error), tempfile.TemporaryDirectory() as state:
+                args = [m.__file__, 'status', '--state', state]
+                out = io.StringIO()
+                with patch.object(sys, 'argv', args), redirect_stdout(out), redirect_stderr(io.StringIO()), \
+                     patch.object(os, 'waitid', side_effect=OSError(error, 'probe'), create=True) as wait:
+                    self.assertEqual(m.main(), int(expected == 'blocked'))
+                    wait.assert_called_once_with(os.P_PID, os.getpid(), os.WEXITED | os.WNOHANG | os.WNOWAIT)
+                self.assertEqual(out.getvalue().strip(), expected)
+
+    def test_run_refuses_unsupported_before_claim_or_spawn(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            args = [m.__file__, 'run', '--state', str(root / 'state'), '--evidence', str(root / 'ev'),
+                    '--', sys.executable, '-c', 'pass']
+            with patch.object(sys, 'argv', args), patch.object(sys, 'platform', 'darwin'), \
+                 patch.object(os, 'waitid', None, create=True), patch.object(os, 'ttyname') as this_tty, \
+                 patch.object(m, 'terminal') as terminal, patch.object(m.subprocess, 'Popen') as spawn, \
+                 redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit) as failure:
+                m.main()
+            self.assertEqual(failure.exception.code, 2)
+            self.assertIn('requires working os.waitid', err.getvalue())
+            this_tty.assert_not_called()
+            terminal.assert_not_called()
+            spawn.assert_not_called()
+            self.assertEqual(list(root.iterdir()), [])
+
+    def test_guard_refuses_unsupported_before_runner_spawn(self):
+        with patch.object(os, 'waitid', None, create=True), patch.object(m.subprocess, 'Popen') as spawn:
+            code, result, blocked = self.run_guard([sys.executable, '-c', 'pass'], cleanup=False)
+        self.assertEqual(code, 1)
+        self.assertIsNone(result['command_exit'])
+        self.assertTrue(result['process_cleanup_complete'])
+        self.assertTrue(blocked)
+        self.assertIn('requires working os.waitid', result['error'])
+        spawn.assert_not_called()
+
     def test_requires_release_not_only_closed_window(self):
         self.assertFalse(m.clean_tab('/dev/ttys001', lambda *x: 'closed', lambda x: ['17'], lambda _: None))
 
